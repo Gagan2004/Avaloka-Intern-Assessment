@@ -1,29 +1,16 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+# C++ compiled executables and objects
+*.exe
+*.out
+*.o
+*.obj
+*.pdb
+*.ilk
 
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
-
-# Unit test / coverage
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Environments
-.venv/
-env/
-venv/
-ENV/
-
-# IDE / Editor configs
+# Visual Studio / VS Code
+.vs/
 .vscode/
-.idea/
-*.swp
-*.swo
+*.user
+*.suo
 
 # OS files
 .DS_Store
