@@ -14,6 +14,7 @@ All files reside cleanly on the **root level**.
 - **[`event_scheduler.h`](event_scheduler.h)**: `can_attend_all`, `min_rooms_required`, and `assign_rooms`.
 - **[`main.cpp`](main.cpp)**: Demonstrations and self-verifying test assertions for both problems.
 - **[`README.md`](README.md)**: Logic explanations, complexities, trade-offs, and compilation instructions.
+- **[`ANALYSIS.md`](ANALYSIS.md)**: In-depth analysis of time & space complexities, data structure trade-offs, room allocation future-proofing, and concurrency designs.
 - **[`.gitignore`](.gitignore)**: Standard C++ build artifact ignore list.
 
 ---

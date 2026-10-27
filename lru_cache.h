@@ -1,170 +1,80 @@
-#ifndef LRU_CACHE_H
-#define LRU_CACHE_H
+Approach. The cache has to do two things in constant time: find an entry by key, and know which entry was used least recently. No single structure does both... so I combine two.
 
-/**
- * Problem 1: LRU Cache Implementation (C++)
- *
- * Logic and Approach:
- * -------------------
- * An LRU (Least Recently Used) cache requires O(1) performance for both `get` and `put`.
- *
- * Data Structures Chosen:
- * 1. std::unordered_map<Key, Node*>:
- *    - Provides O(1) average-time lookup for any key.
- *    - Storing pointers directly to doubly linked list nodes allows immediate access.
- *
- * 2. Custom Doubly Linked List (DLL):
- *    - Maintains access order: most recently used (MRU) at the front, least recently used (LRU) at the back.
- *    - Allows O(1) detachment, insertion, and eviction without shifting elements.
- *
- * Why not a Singly Linked List:
- *    - In a singly linked list, deleting a node requires finding its predecessor, which is an O(N) traversal.
- *    - A doubly linked list has `prev` and `next`, enabling instant O(1) deletion given the node pointer.
- *
- * Dummy Sentinels (head & tail):
- *    - Head and tail sentinel nodes eliminate boundary edge-case checks (e.g., empty list, single element).
- *
- * Memory Management:
- *    - Destructor safely cleans up all allocated nodes to prevent memory leaks.
- */
+An unordered_map<int, Node*> gives O(1)  time complexity lookup from a key to its node.
+A doubly linked list keeps the entries in The order the nodes have been accesed. The most recently used node sits right after the HEAD sentinel, and the least recently used sits right before the TAIL sentinel.
 
-#include <iostream>
-#include <mutex>
+The map and list work together. The map hands me the node directly (it stores the node reference as the value) , with no scanning. Because each node knows its own prev and next, I can unlink it and reinsert it at the front with a fixed number of pointer writes. That is how get marks a key as recently used. deletion is also O(1): the victim node is always tail_.prev, and since each node stores its own key, I can erase the matching map entry without searching.
+
+ arrays can't be used instead of Doubly LL as moving an item to the front is O(n). In a singly linked list, unlinking a node needs its previous node, which takes an O(n) to find it. Sentinel head and tail nodes remove the special cases for an empty list or for operating on the first or last element.
+
 #include <stdexcept>
 #include <unordered_map>
+using namespace std;
 
-template <typename Key = int, typename Value = int>
 class LRUCache {
-public:
     struct Node {
-        Key key;
-        Value val;
-        Node* prev;
-        Node* next;
-
-        Node(Key k = Key(), Value v = Value())
-            : key(k), val(v), prev(nullptr), next(nullptr) {}
+        int key, val;
+        Node *prev = nullptr, *next = nullptr;
+        Node(int k = 0, int v = 0) : key(k), val(v) {}
     };
 
-    explicit LRUCache(int cap) : capacity(cap) {
-        if (capacity <= 0) {
-            throw std::invalid_argument("Capacity must be greater than 0.");
-        }
-        // Initialize sentinels
-        head = new Node();
-        tail = new Node();
-        head->next = tail;
-        tail->prev = head;
+    int cap_;
+    unordered_map<int, Node*> map_;
+    Node head_, tail_;                       // sentinels
+
+    void unlink(Node* n) {
+        n->prev->next = n->next;
+        n->next->prev = n->prev;
+    }
+    void pushFront(Node* n) {                // right after head_ = most recent
+        n->prev = &head_;
+        n->next = head_.next;
+        head_.next->prev = n;
+        head_.next = n;
     }
 
-    virtual ~LRUCache() {
-        Node* curr = head;
-        while (curr != nullptr) {
-            Node* next_node = curr->next;
-            delete curr;
-            curr = next_node;
+public:
+    explicit LRUCache(int capacity) : cap_(capacity) {
+        if (capacity <= 0) throw invalid_argument("capacity must be positive");
+        head_.next = &tail_;
+        tail_.prev = &head_;
+    }
+    ~LRUCache() {
+        for (Node* c = head_.next; c != &tail_;) {
+            Node* nx = c->next;
+            delete c;
+            c = nx;
         }
     }
-
-    // Disable copy semantics to prevent double frees
     LRUCache(const LRUCache&) = delete;
     LRUCache& operator=(const LRUCache&) = delete;
 
-    /**
-     * Returns the value for key if present (marking it MRU), otherwise -1.
-     */
-    virtual Value get(const Key& key) {
-        auto it = cache.find(key);
-        if (it == cache.end()) {
-            return -1;
-        }
-
-        Node* node = it->second;
-        moveToFront(node);
-        return node->val;
+    int get(int key) {
+        auto it = map_.find(key);
+        if (it == map_.end()) return -1;
+        Node* n = it->second;
+        unlink(n);                           // mark as recently used
+        pushFront(n);
+        return n->val;
     }
 
-    /**
-     * Inserts or updates the key-value pair.
-     * Evicts the least recently used item if capacity is exceeded.
-     */
-    virtual void put(const Key& key, const Value& value) {
-        auto it = cache.find(key);
-        if (it != cache.end()) {
-            Node* node = it->second;
-            node->val = value;
-            moveToFront(node);
+    void put(int key, int value) {
+        auto it = map_.find(key);
+        if (it != map_.end()) {              // update existing key
+            Node* n = it->second;
+            n->val = value;
+            unlink(n);
+            pushFront(n);
             return;
         }
-
-        if (static_cast<int>(cache.size()) >= capacity) {
-            Node* lru = popTail();
-            cache.erase(lru->key);
+        if (static_cast<int>(map_.size()) == cap_) {   // evict LRU
+            Node* lru = tail_.prev;
+            unlink(lru);
+            map_.erase(lru->key);
             delete lru;
         }
-
-        Node* new_node = new Node(key, value);
-        cache[key] = new_node;
-        addToFront(new_node);
-    }
-
-    int size() const {
-        return static_cast<int>(cache.size());
-    }
-
-protected:
-    int capacity;
-    std::unordered_map<Key, Node*> cache;
-    Node* head; // Sentinel: head->next is MRU
-    Node* tail; // Sentinel: tail->prev is LRU
-
-    void removeNode(Node* node) {
-        node->prev->next = node->next;
-        node->next->prev = node->prev;
-    }
-
-    void addToFront(Node* node) {
-        node->next = head->next;
-        node->prev = head;
-        head->next->prev = node;
-        head->next = node;
-    }
-
-    void moveToFront(Node* node) {
-        removeNode(node);
-        addToFront(node);
-    }
-
-    Node* popTail() {
-        Node* lru = tail->prev;
-        if (lru == head) {
-            throw std::runtime_error("Attempted eviction from empty cache.");
-        }
-        removeNode(lru);
-        return lru;
+        Node* n = new Node(key, value);
+        map_[key] = n;
+        pushFront(n);
     }
 };
-
-/**
- * Thread-safe wrapper around LRUCache using std::mutex.
- */
-template <typename Key = int, typename Value = int>
-class ThreadSafeLRUCache : public LRUCache<Key, Value> {
-public:
-    explicit ThreadSafeLRUCache(int cap) : LRUCache<Key, Value>(cap) {}
-
-    Value get(const Key& key) override {
-        std::lock_guard<std::mutex> lock(mtx);
-        return LRUCache<Key, Value>::get(key);
-    }
-
-    void put(const Key& key, const Value& value) override {
-        std::lock_guard<std::mutex> lock(mtx);
-        LRUCache<Key, Value>::put(key, value);
-    }
-
-private:
-    std::mutex mtx;
-};
-
-#endif // LRU_CACHE_H
